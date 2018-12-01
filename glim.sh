@@ -86,8 +86,14 @@ else
   EFI=0
   echo 'WARNING: no /usr/lib/grub/x86_64-efi dir, grub2-efi-x64-modules package missing? Skipping GRUB x86_64 UEFI support.'
 fi
+if [[ -d '/usr/lib/grub/i386-efi' ]]; then
+	EFI32=1
+else
+  EFI32=0
+  echo 'WARNING: no /usr/lib/grub/i386-efi dir. Skipping GRUB IA32 UEFI support'
+fi
 
-if (( BIOS == 0 && EFI == 0 )); then
+if (( BIOS == 0 && EFI == 0 && EFI32 == 0 )); then
   echo 'ERROR: No usable install targets found. Cannot proceed.'
   exit 1
 fi
@@ -112,7 +118,17 @@ if (( EFI == 1 )); then
     echo 'Y'
   fi
 fi
-if (( BIOS == 0 && EFI == 0 )); then
+if (( EFI32 == 1 )); then
+  read -r -n 1 -s -p 'Install GRUB for IA32 UEFI? (Y/n) ' PROCEED
+  if [[ "$PROCEED" == 'n' ]]; then
+    EFI32=0
+    echo 'n'
+  else
+    echo 'Y'
+  fi
+fi
+
+if (( BIOS == 0 && EFI == 0 && EFI32 == 0 )); then
   echo 'ERROR: No install targets selected. Cannot proceed.'
   exit 2
 fi
@@ -147,10 +163,19 @@ if (( EFI == 1 )); then
     exit 1
   fi
 fi
+if (( EFI32 == 1 )); then
+  GRUB_TARGET=('--target=i386-efi' "--efi-directory=${USBMNT}" '--removable')
+  if ! (set -x; ${PRIVILEGE_ELEVATION} "${GRUB2_INSTALL}" "${GRUB_TARGET[@]}" "${GRUB_COMMON_ARGS[@]}"); then
+    echo "ERROR: ${GRUB2_INSTALL} returned with an error exit status."
+    exit 1
+  fi
+  # GRUB Bug: Remove unneded file, ${USBMNT}/EFI/BOOT/BOOTIA32.EFI provides the bootloader
+  [[ -e "${USBMNT}/EFI/BOOT/grub.efi" ]] && ${PRIVILEGE_ELEVATION} rm -- "${USBMNT}/EFI/BOOT/grub.efi"
+fi
 
 
 # Copy GRUB2 configuration
-if ! (set -x; rsync -rpt --delete --exclude='i386-pc' --exclude='x86_64-efi' --exclude='fonts' --exclude='icons/originals' -- "${GRUB2_CONF}/" "${USBMNT}/boot/${GRUB2_DIR}"); then
+if ! (set -x; rsync -rpt --delete --exclude='i386-pc' --exclude='x86_64-efi' --exclude='i386-efi' --exclude='fonts' --exclude='icons/originals' -- "${GRUB2_CONF}/" "${USBMNT}/boot/${GRUB2_DIR}"); then
   echo 'ERROR: the rsync copy returned with an error exit status.'
   exit 1
 fi
