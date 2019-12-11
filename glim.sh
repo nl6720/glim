@@ -15,12 +15,11 @@ else
   USBPART="$(realpath -- "$1")"
 fi
 
-# Check that we are *NOT* running as root
-if (( EUID == 0 )); then
-  echo 'ERROR: Do not run as root, use a user with full sudo access.'
-  exit 1
-else
+# Use `sudo` if user is not root
+if (( EUID != 0 )); then
   PRIVILEGE_ELEVATION='sudo --'
+else
+  PRIVILEGE_ELEVATION=''
 fi
 
 # Sanity check : GRUB2
